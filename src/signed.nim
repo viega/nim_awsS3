@@ -1,13 +1,12 @@
 # Copyright Thomas T. Jarløv (TTJ) - ttj@ttj.dk
-
+import
   std/httpclient,
   std/httpcore,
   std/json,
   std/mimetypes,
   std/os,
   std/strutils,
-  std/tables
-
+  std/tables,
   awsSTS,
   sigv4
 
@@ -20,21 +19,23 @@ type
 const
   mimetypeDB = mimes.toTable
 
-proc s3SignedUrl*(
-    credsAccessKey, credsSecretKey, credsRegion: string,
-    bucketHost, key: string,
-    httpMethod = HttpGet,
-    contentDisposition = CDTignore, contentDispositionName = "",
-    setContentType = true,
-    fileExt = "", customQuery = "", copyObject = "", expireInSec = "65",
-    accessToken = ""
-  ): string =
+proc s3SignedUrl*(credsAccessKey, credsSecretKey, credsRegion: string,
+                  bucketHost, key: string,
+                  httpMethod = HttpGet,
+                  contentDisposition = CDTignore,
+                  contentDispositionName = "",
+                  setContentType = true,
+                  fileExt = "",
+                  customQuery = "",
+                  copyObject = "",
+                  expireInSec = "65",
+                  accessToken = ""): string =
   ## Generate a S3 signed URL.
   ##
   ## customQuery:
-  ##  This is a custom defined header query. The string needs to include the format
-  ##  "head1:value,head2:value" - a comma separated string with header and
-  ##  value diveded by colon.
+  ##  This is a custom defined header query. The string needs to
+  ##  include the format "head1:value,head2:value" - a comma separated
+  ##  string with header and value diveded by colon.
   ##
   ## fileExt => ".jpg", ".ifc"
 
@@ -51,7 +52,9 @@ proc s3SignedUrl*(
     digest = SHA256
     expireSec = expireInSec
     datetime = makeDateTime()
-    scope = credentialScope(region = region, service = service, date = datetime)
+    scope = credentialScope(region = region,
+                            service = service,
+                            date = datetime)
 
   var
     headers = newHttpHeaders(@[
@@ -120,21 +123,28 @@ proc s3SignedUrl*(
         digest = UnsignedPayload)
     sts = stringToSign(request.hash(digest), scope, date = datetime,
         digest = digest)
-    signature = calculateSignature(secret = secretKey, date = datetime, region = region,
-                                  service = service, tosign = sts,
-                                  digest = digest)
+    signature = calculateSignature(secret = secretKey,
+                                   date = datetime,
+                                   region = region,
+                                   service = service,
+                                   tosign = sts,
+                                   digest = digest)
 
   result = url & "?" & request.split("\n")[2] & "&X-Amz-Signature=" & signature
 
   when defined(dev):
     echo result
 
-proc s3SignedUrl*(awsCreds: AwsCreds, bucketHost, key: string,
-    httpMethod = HttpGet,
-    contentDisposition = CDTignore, contentDispositionName = "",
-    setContentType = true, fileExt = "", customQuery = "", copyObject = "",
-    expireInSec = "65"
-  ): string =
+proc s3SignedUrl*(awsCreds: AwsCreds,
+                  bucketHost, key: string,
+                  httpMethod = HttpGet,
+                  contentDisposition = CDTignore,
+                  contentDispositionName = "",
+                  setContentType = true,
+                  fileExt = "",
+                  customQuery = "",
+                  copyObject = "",
+                  expireInSec = "65"): string =
 
   return s3SignedUrl(
       awsCreds.AWS_ACCESS_KEY_ID, awsCreds.AWS_SECRET_ACCESS_KEY,
