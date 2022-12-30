@@ -21,8 +21,6 @@
 ##    region (host) should be appended within here. In that way we would only
 ##    need to pass `bucketName` (shortform) around.
 
-
-import
   std/asyncdispatch,
   std/httpclient,
   std/httpcore,
@@ -31,15 +29,11 @@ import
   std/strutils,
   std/uri
 
-import
   awsSTS
 
-import
   ./signed
 export
   signed
-
-
 
 #
 # Credentials
@@ -47,13 +41,11 @@ export
 proc s3Creds*(accessKey, secretKey, tokenKey, region: string): AwsCreds =
   ## Don't like the `awsSTS` package? Fine, just create the creds here.
   result = AwsCreds(
-    AWS_REGION:             region,
-    AWS_ACCESS_KEY_ID:      accessKey,
-    AWS_SECRET_ACCESS_KEY:  secretKey,
-    AWS_SESSION_TOKEN:      tokenKey
+    AWS_REGION: region,
+    AWS_ACCESS_KEY_ID: accessKey,
+    AWS_SECRET_ACCESS_KEY: secretKey,
+    AWS_SESSION_TOKEN: tokenKey
   )
-
-
 
 #
 # S3 presigned GET
@@ -73,25 +65,26 @@ proc s3Presigned*(accessKey, secretKey, region: string, bucketHost, key: string,
   ##                   needs to be ".jpg" (dot before) like splitFile(f).ext
   return s3SignedUrl(accessKey, secretKey, region, bucketHost, key,
       httpMethod = httpMethod,
-      contentDisposition = contentDisposition, contentDispositionName = contentDispositionName,
+      contentDisposition = contentDisposition,
+      contentDispositionName = contentDispositionName,
       setContentType = setContentType,
       fileExt = fileExt, expireInSec = expireInSec, accessToken = accessToken
     )
 
-
 proc s3Presigned*(creds: AwsCreds, bucketHost, key: string,
-    contentDisposition = CDTattachment, contentDispositionName="",
-    setContentType=true, fileExt="", expireInSec="65"): string =
+    contentDisposition = CDTattachment, contentDispositionName = "",
+    setContentType = true, fileExt = "", expireInSec = "65"): string =
 
   return s3Presigned(
       creds.AWS_ACCESS_KEY_ID, creds.AWS_SECRET_ACCESS_KEY, creds.AWS_REGION,
       bucketHost, key,
       httpMethod = HttpGet,
-      contentDisposition = contentDisposition, contentDispositionName = contentDispositionName,
-      setContentType = setContentType, fileExt = fileExt, expireInSec = expireInSec,
+      contentDisposition = contentDisposition,
+      contentDispositionName = contentDispositionName,
+      setContentType = setContentType, fileExt = fileExt,
+      expireInSec = expireInSec,
       accessToken = creds.AWS_SESSION_TOKEN
     )
-
 
 #
 # Helper procedures
@@ -107,8 +100,6 @@ proc parseReponse*(response: AsyncResponse): (bool, HttpHeaders) =
     when defined(dev): echo "failure: " & $response.code
     return (false, response.headers)
 
-
-
 proc isSuccess2xx*(response: AsyncResponse): (bool) =
   ## Helper-Procedure that can be used with the raw call for parsing the response.
   if response.code.is2xx:
@@ -119,42 +110,42 @@ proc isSuccess2xx*(response: AsyncResponse): (bool) =
     when defined(dev): echo "failure: " & $response.code
     return (false)
 
-
-
-
 #
 # Delete object
 #
-proc s3DeleteObject(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key: string): Future[AsyncResponse] {.async.} =# Future[tuple[success: bool, headers: HttpHeaders]] {.async.} =
+proc s3DeleteObject(client: AsyncHttpClient, creds: AwsCreds, bucketHost,
+    key: string): Future[
+    AsyncResponse] {.async.} = # Future[tuple[success: bool, headers: HttpHeaders]] {.async.} =
   ## AWS S3 API - DeleteObject
-  result = await client.request(s3SignedUrl(creds, bucketHost, key, httpMethod=HttpDelete, setContentType=false), httpMethod=HttpDelete)
+  result = await client.request(s3SignedUrl(creds, bucketHost, key,
+      httpMethod = HttpDelete, setContentType = false), httpMethod = HttpDelete)
 
-
-proc s3DeleteObjectIs2xx*(creds: AwsCreds, bucketHost, key: string): Future[bool] {.async.} =
+proc s3DeleteObjectIs2xx*(creds: AwsCreds, bucketHost, key: string): Future[
+    bool] {.async.} =
   ## AWS S3 API - DeleteObject bool
   if key.contains(" "):
     echo("s3DeleteObjectIs2xx(): Skipping due spaces = " & key)
     return false
   else:
     let client = newAsyncHttpClient()
-    result = (await (s3DeleteObject(client, creds, bucketHost, key))).isSuccess2xx()
+    result = (await (s3DeleteObject(client, creds, bucketHost,
+        key))).isSuccess2xx()
     client.close()
-
-
-
 
 #
 # Head object
 #
-proc s3HeadObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key: string): Future[AsyncResponse] {.async.} =
+proc s3HeadObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost,
+    key: string): Future[AsyncResponse] {.async.} =
   ## AWS S3 API - HeadObject
   ##
   ## Response:
   ##  - result.headers["content-length"]
-  result = await client.request(s3SignedUrl(creds, bucketHost, key, httpMethod=HttpHead, setContentType=false), httpMethod=HttpHead)
+  result = await client.request(s3SignedUrl(creds, bucketHost, key,
+      httpMethod = HttpHead, setContentType = false), httpMethod = HttpHead)
 
-
-proc s3HeadObjectIs2xx*(creds: AwsCreds, bucketHost, key: string): Future[bool] {.async.} =
+proc s3HeadObjectIs2xx*(creds: AwsCreds, bucketHost, key: string): Future[
+    bool] {.async.} =
   ## AWS S3 API - HeadObject bool
   ##
   ## AWS S3 API - HeadObject is2xx is only checking the existing of the file.
@@ -165,23 +156,33 @@ proc s3HeadObjectIs2xx*(creds: AwsCreds, bucketHost, key: string): Future[bool] 
     return false
   else:
     let client = newAsyncHttpClient()
-    result = (await (s3HeadObject(client, creds, bucketHost, key))).isSuccess2xx()
+    result = (await (s3HeadObject(client, creds, bucketHost,
+        key))).isSuccess2xx()
     client.close()
-
-
 
 #
 # Get object
 #
 # proc s3GetObject*(client: HttpClient, bucketHost, key, downloadPath: string) =
-proc s3GetObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key, downloadPath: string) {.async.} =
+proc s3GetObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key,
+    downloadPath: string) {.async.} =
   ## AWS S3 API - GetObject
   ##
   ## `downloadPath` needs to full local path.
-  await client.downloadFile(s3SignedUrl(creds, bucketHost, key, httpMethod=HttpGet, setContentType=false), downloadPath)
+  await client.downloadFile(s3SignedUrl(creds, bucketHost, key,
+      httpMethod = HttpGet, setContentType = false), downloadPath)
 
+proc s3GetObjectToStr*(client: AsyncHttpClient,
+                       creds: AwsCreds,
+                       bucketHost, key: string): Future[string] {.async.} =
+  return await client.getContent(s3SignedUrl(creds,
+                                             bucketHost,
+                                             key,
+                                             httpMethod = HttpGet,
+                                             setContentType = false))
 
-proc s3GetObjectIs2xx*(creds: AwsCreds, bucketHost, key, downloadPath: string): Future[bool] {.async.} =
+proc s3GetObjectIs2xx*(creds: AwsCreds, bucketHost, key,
+    downloadPath: string): Future[bool] {.async.} =
   ## AWS S3 API - GetObject bool
   ##
   ## AWS S3 API - GetObject is2xx returns true on downloaded file.
@@ -197,19 +198,31 @@ proc s3GetObjectIs2xx*(creds: AwsCreds, bucketHost, key, downloadPath: string): 
     client.close()
     result = fileExists(downloadPath)
 
-
+proc s3PutObjectFromStr*(client: AsyncHttpClient,
+                         creds: AwsCreds, bucketHost,
+                         key, body: string): Future[AsyncResponse] {.async.} =
+  return await client.put(s3SignedUrl(creds,
+                                      bucketHost,
+                                      key,
+                                      httpMethod = HttpPut),
+                          body)
 
 #
 # Put object
 #
-proc s3PutObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key, localPath: string): Future[AsyncResponse]  {.async.} =
+proc s3PutObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key,
+    localPath: string): Future[AsyncResponse] {.async.} =
   ## AWS S3 API - PutObject
   ##
   ## The PutObject reads the file to memory and uploads it.
-  result = await client.put(s3SignedUrl(creds, bucketHost, key, httpMethod=HttpPut), body = readFile(localPath))
+  result = await client.put(s3SignedUrl(creds,
+                                        bucketHost,
+                                        key,
+                                        httpMethod = HttpPut),
+                            body = readFile(localPath))
 
-
-proc s3PutObjectIs2xx*(creds: AwsCreds, bucketHost, key, localPath: string, deleteLocalFileAfter=true): Future[bool] {.async.} =
+proc s3PutObjectIs2xx*(creds: AwsCreds, bucketHost, key, localPath: string,
+    deleteLocalFileAfter = true): Future[bool] {.async.} =
   ## AWS S3 API - PutObject bool
   ##
   ## This performs a PUT and uploads the file. The `localPath` param needs to
@@ -224,17 +237,17 @@ proc s3PutObjectIs2xx*(creds: AwsCreds, bucketHost, key, localPath: string, dele
     return false
   else:
     let client = newAsyncHttpClient()
-    result = (await (s3PutObject(client, creds, bucketHost, key, localPath))).isSuccess2xx()
+    result = (await (s3PutObject(client, creds, bucketHost, key,
+        localPath))).isSuccess2xx()
     client.close()
     if deleteLocalFileAfter:
       removeFile(localPath)
 
-
-
 #
 # Copy object
 #
-proc s3CopyObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key, copyObject: string): Future[AsyncResponse]  {.async.} =
+proc s3CopyObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key,
+    copyObject: string): Future[AsyncResponse] {.async.} =
   ## AWS S3 API - CopyObject
   ##
   ## The copyObject param is the full path to the copy source, this means both
@@ -256,25 +269,27 @@ proc s3CopyObject*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key, co
       ("x-amz-copy-source", copyObjectEncoded),
     ])
 
-  result = await client.request(s3SignedUrl(creds, bucketHost, key, httpMethod=HttpPut, copyObject=copyObjectEncoded), httpMethod=HttpPut, headers=headers)
+  result = await client.request(s3SignedUrl(creds, bucketHost, key,
+      httpMethod = HttpPut, copyObject = copyObjectEncoded),
+      httpMethod = HttpPut, headers = headers)
 
-
-proc s3CopyObjectIs2xx*(client: AsyncHttpClient, creds: AwsCreds, bucketHost, key, copyObject: string): Future[bool] {.async.} =
+proc s3CopyObjectIs2xx*(client: AsyncHttpClient, creds: AwsCreds, bucketHost,
+    key, copyObject: string): Future[bool] {.async.} =
   ## AWS S3 API - CopyObject bool
   if key.contains(" "):
     echo("s3CopyObjectIs2xx(): Skipping due spaces = " & key)
     return false
   else:
     let client = newAsyncHttpClient()
-    result = (await s3CopyObject(client, creds, bucketHost, key, copyObject)).isSuccess2xx()
+    result = (await s3CopyObject(client, creds, bucketHost, key,
+        copyObject)).isSuccess2xx()
     client.close()
-
-
 
 #
 # Move object aka Copy & Delete
 #
-proc s3MoveObject*(creds: AwsCreds, bucketToHost, keyTo, bucketFromHost, bucketFromName, keyFrom: string) {.async.} =
+proc s3MoveObject*(creds: AwsCreds, bucketToHost, keyTo, bucketFromHost,
+    bucketFromName, keyFrom: string) {.async.} =
   ## This does a pseudo move of an object. We copy the object to the destination
   ## and then we delete the object from the original location.
   ##
@@ -286,14 +301,16 @@ proc s3MoveObject*(creds: AwsCreds, bucketToHost, keyTo, bucketFromHost, bucketF
   ##
   let client = newAsyncHttpClient()
 
-  if (await s3CopyObject(client, creds, bucketToHost, keyTo, "/" & bucketFromName & "/" & keyFrom)).isSuccess2xx():
-    if not (await (s3DeleteObject(client, creds, bucketFromHost, keyFrom))).isSuccess2xx():
+  if (await s3CopyObject(client, creds, bucketToHost, keyTo, "/" &
+      bucketFromName & "/" & keyFrom)).isSuccess2xx():
+    if not (await (s3DeleteObject(client, creds, bucketFromHost,
+        keyFrom))).isSuccess2xx():
       echo("s3MoveObject(): Failed on delete - " & bucketFromHost & keyFrom)
 
   client.close()
 
-
-proc s3MoveObjects*(creds: AwsCreds, bucketHost, bucketFromHost, bucketFromName: string, keys: seq[string]) {.async.} =
+proc s3MoveObjects*(creds: AwsCreds, bucketHost, bucketFromHost,
+    bucketFromName: string, keys: seq[string]) {.async.} =
   ## In this (plural) multiple moves are performed. The keys are identical in
   ## "from" and "to", so origin and destination are the same.
   let client = newAsyncHttpClient()
@@ -302,7 +319,8 @@ proc s3MoveObjects*(creds: AwsCreds, bucketHost, bucketFromHost, bucketFromName:
 
   for key in keys:
     try:
-      if (await s3CopyObject(client, creds, bucketHost, key, "/" & bucketFromName & "/" & key)).isSuccess2xx():
+      if (await s3CopyObject(client, creds, bucketHost, key, "/" &
+          bucketFromName & "/" & key)).isSuccess2xx():
         keysSuccess.add(key)
     except:
       error("s3MoveObjects(): Failed on copy - " & bucketHost & " - " & key)
@@ -310,7 +328,8 @@ proc s3MoveObjects*(creds: AwsCreds, bucketHost, bucketFromHost, bucketFromName:
 
   for key in keysSuccess:
     try:
-      if not (await (s3DeleteObject(client, creds, bucketFromHost, key))).isSuccess2xx():
+      if not (await (s3DeleteObject(client, creds, bucketFromHost,
+          key))).isSuccess2xx():
         warn("s3MoveObject(): Could not delete - " & bucketFromHost & " - " & key)
     except:
       error("s3MoveObjects(): Failed on delete - " & bucketFromHost & " - " & key)
@@ -318,19 +337,19 @@ proc s3MoveObjects*(creds: AwsCreds, bucketHost, bucketFromHost, bucketFromName:
 
   client.close()
 
-
-
 #
 # Trash object aka move
 #
-proc s3TrashObject*(creds: AwsCreds, bucketTrashHost, bucketFromHost, bucketFromName, keyFrom: string) {.async.} =
+proc s3TrashObject*(creds: AwsCreds, bucketTrashHost, bucketFromHost,
+    bucketFromName, keyFrom: string) {.async.} =
   ## This does a pseudo move of an object. We copy the object to the destination
   ## and then we delete the object from the original location.
   ## The destination in this particular situation - is our trash.
-  await s3MoveObject(creds, bucketTrashHost, keyFrom, bucketFromHost, bucketFromName, keyFrom)
+  await s3MoveObject(creds, bucketTrashHost, keyFrom, bucketFromHost,
+      bucketFromName, keyFrom)
 
-
-proc s3TrashObjects*(creds: AwsCreds, bucketTrashHost, bucketFromHost, bucketFromName: string, keys: seq[string]) {.async.} =
+proc s3TrashObjects*(creds: AwsCreds, bucketTrashHost, bucketFromHost,
+    bucketFromName: string, keys: seq[string]) {.async.} =
   ## This does a pseudo move of an object. We copy the object to the destination
   ## and then we delete the object from the original location.
   ## The destination in this particular situation - is our trash.

@@ -1,7 +1,5 @@
 # Copyright Thomas T. Jarløv (TTJ) - ttj@ttj.dk
 
-
-import
   std/httpclient,
   std/httpcore,
   std/json,
@@ -10,8 +8,6 @@ import
   std/strutils,
   std/tables
 
-
-import
   awsSTS,
   sigv4
 
@@ -23,7 +19,6 @@ type
 
 const
   mimetypeDB = mimes.toTable
-
 
 proc s3SignedUrl*(
     credsAccessKey, credsSecretKey, credsRegion: string,
@@ -46,17 +41,17 @@ proc s3SignedUrl*(
   let
     accessKey = credsAccessKey
     secretKey = credsSecretKey
-    tokenKey  = accessToken
+    tokenKey = accessToken
 
-    url       = "https://" & bucketHost & "/" & key
-    region    = credsRegion
-    service   = "s3"
+    url = "https://" & bucketHost & "/" & key
+    region = credsRegion
+    service = "s3"
 
-    payload   = ""
-    digest    = SHA256
+    payload = ""
+    digest = SHA256
     expireSec = expireInSec
-    datetime  = makeDateTime()
-    scope     = credentialScope(region=region, service=service, date=datetime)
+    datetime = makeDateTime()
+    scope = credentialScope(region = region, service = service, date = datetime)
 
   var
     headers = newHttpHeaders(@[
@@ -74,24 +69,23 @@ proc s3SignedUrl*(
               "X-Amz-Date": datetime,
               "X-Amz-Expires": expireSec,
               # "X-Amz-SignedHeaders": "host"
-            }
+      }
 
   if tokenKey != "":
     query["X-Amz-Security-Token"] = newJString(tokenKey)
 
-
   if contentDisposition != CDTignore or contentDispositionName != "":
     let dispType =
-        case contentDisposition
-        of CDTinline:
-          "inline;"
-        of CDTattachment:
-          "attachment;"
-        else:
-          ""
+      case contentDisposition
+      of CDTinline:
+        "inline;"
+      of CDTattachment:
+        "attachment;"
+      else:
+        ""
 
     let filename =
-        if contentDispositionName == "":
+      if contentDispositionName == "":
           ""
         elif dispType == "":
           "filename=\"" & contentDispositionName & "\""
@@ -100,22 +94,20 @@ proc s3SignedUrl*(
 
     query["response-content-disposition"] = newJString(dispType & filename)
 
-
   if setContentType:
     let extension =
-        if fileExt != "":
+      if fileExt != "":
           fileExt[1..^1]
         else:
           splitFile(key).ext[1..^1]
 
-    query["response-content-type"] = newJString(mimetypeDB.getOrDefault(extension, "binary/octet-stream"))
-
+    query["response-content-type"] = newJString(mimetypeDB.getOrDefault(
+        extension, "binary/octet-stream"))
 
   if customQuery != "":
     for c in split(customQuery, ","):
       let q = split(c, ":")
       query[q[0]] = newJString(q[1])
-
 
   # Add the signed headers to query
   if copyObject != "":
@@ -123,18 +115,19 @@ proc s3SignedUrl*(
   else:
     query["X-Amz-SignedHeaders"] = newJString("host")
 
-
   let
-    request   = canonicalRequest(httpMethod, url, query, headers, payload, digest = UnsignedPayload)
-    sts       = stringToSign(request.hash(digest), scope, date = datetime, digest = digest)
-    signature = calculateSignature(secret=secretKey, date = datetime, region = region,
-                                  service = service, tosign = sts, digest = digest)
+    request = canonicalRequest(httpMethod, url, query, headers, payload,
+        digest = UnsignedPayload)
+    sts = stringToSign(request.hash(digest), scope, date = datetime,
+        digest = digest)
+    signature = calculateSignature(secret = secretKey, date = datetime, region = region,
+                                  service = service, tosign = sts,
+                                  digest = digest)
 
   result = url & "?" & request.split("\n")[2] & "&X-Amz-Signature=" & signature
 
   when defined(dev):
     echo result
-
 
 proc s3SignedUrl*(awsCreds: AwsCreds, bucketHost, key: string,
     httpMethod = HttpGet,
@@ -144,11 +137,14 @@ proc s3SignedUrl*(awsCreds: AwsCreds, bucketHost, key: string,
   ): string =
 
   return s3SignedUrl(
-      awsCreds.AWS_ACCESS_KEY_ID, awsCreds.AWS_SECRET_ACCESS_KEY, awsCreds.AWS_REGION,
+      awsCreds.AWS_ACCESS_KEY_ID, awsCreds.AWS_SECRET_ACCESS_KEY,
+      awsCreds.AWS_REGION,
       bucketHost, key,
       httpMethod = httpMethod,
-      contentDisposition = contentDisposition, contentDispositionName = contentDispositionName,
+      contentDisposition = contentDisposition,
+      contentDispositionName = contentDispositionName,
       setContentType = setContentType,
-      fileExt = fileExt, customQuery = customQuery, copyObject = copyObject, expireInSec = expireInSec,
+      fileExt = fileExt, customQuery = customQuery, copyObject = copyObject,
+      expireInSec = expireInSec,
       accessToken = awsCreds.AWS_SESSION_TOKEN
     )
